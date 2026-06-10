@@ -6,11 +6,15 @@
 // shared service, and returns the final answer. Run with:  npm start
 
 import express from "express";
+import cors from "cors";
 import { runSupervisor } from "./service.js";
 import { tracingTarget } from "./observability.js";
 
 const app = express();
 const PORT = process.env.PORT || 2424;
+
+// Allow the browser-based UI (different origin) to call this API.
+app.use(cors());
 
 // Parse JSON request bodies.
 app.use(express.json());

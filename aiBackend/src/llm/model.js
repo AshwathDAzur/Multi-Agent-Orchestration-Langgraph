@@ -6,7 +6,7 @@
 
 import { ChatOpenAI } from "@langchain/openai";
 
-const DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b";
+const DEFAULT_MODEL = process.env.DEFAULT_MODEL;
 
 /**
  * Create a configured chat model pointed at OpenRouter.

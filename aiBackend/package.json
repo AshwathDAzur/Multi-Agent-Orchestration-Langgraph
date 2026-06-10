@@ -10,6 +10,7 @@
     "@langfuse/langchain": "^5.4.1",
     "@langfuse/otel": "^5.4.1",
     "@opentelemetry/sdk-node": "^0.218.0",
+    "cors": "^2.8.6",
     "express": "^4.21.2",
     "zod": "^4.4.3"
   }
