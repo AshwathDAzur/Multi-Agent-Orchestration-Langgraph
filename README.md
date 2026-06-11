@@ -70,9 +70,32 @@ aiBackend (:2424) and Redis are internal-only — not published to the host.
 
 This keeps tokens out of JavaScript (XSS-safe) — the production-correct approach.
 
+## Observability — Langfuse (co-located, SEPARATE stack)
+
+The `langfuse/` folder is a **self-hosted Langfuse** stack for tracing the
+multi-agent runs. It lives inside this project for convenience but is its **own
+Docker Compose project and network** — it is NOT part of the main
+`docker-compose.yml` and is started/stopped independently.
+
+```powershell
+# Start / stop Langfuse (from its own folder)
+cd c:\ArtificialIntelligence\multiAgentBoilerplate\langfuse
+docker compose up -d        # dashboard at http://localhost:3000
+docker compose down         # stop (keeps traces/account in volumes)
+```
+
+- The aiBackend reaches it at **`http://host.docker.internal:3000`**
+  (set via `LANGFUSE_BASEURL` in the main compose) — because the two stacks are
+  on different networks, it goes out through the host.
+- Tracing is **fire-and-forget**: if the Langfuse stack is down, the app keeps
+  working and tracing simply no-ops (non-fatal).
+- Langfuse keys live in the main `.env` (`LANGFUSE_PUBLIC_KEY` /
+  `LANGFUSE_SECRET_KEY`); see `langfuse/README.md` for first-time setup.
+
+> The two stacks are intentionally separate so the heavy Langfuse services
+> (ClickHouse, MinIO, etc.) can be started only when you want traces.
+
 ## Notes
 
 - Secrets here are **dev defaults** — change `SESSION_SECRET`,
   `KEYCLOAK_CLIENT_SECRET`, and Keycloak admin creds for anything real.
-- Observability: aiBackend traces to the host Langfuse stack (`:3000`) if it's
-  running; otherwise tracing simply no-ops (non-fatal).
