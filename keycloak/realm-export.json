@@ -17,17 +17,17 @@
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
-      "secret": "bff-secret",
+      "secret": "${BFF_CLIENT_SECRET:bff-secret}",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
-        "http://localhost:8080/auth/callback",
-        "http://localhost:8080/*"
+        "${APP_PUBLIC_URL:http://localhost:8080}/auth/callback",
+        "${APP_PUBLIC_URL:http://localhost:8080}/*"
       ],
-      "webOrigins": ["http://localhost:8080"],
+      "webOrigins": ["${APP_PUBLIC_URL:http://localhost:8080}"],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:8080/*"
+        "post.logout.redirect.uris": "${APP_PUBLIC_URL:http://localhost:8080}/*"
       },
       "fullScopeAllowed": true
     }

@@ -28,6 +28,9 @@ export const config = {
   session: {
     secret: process.env.SESSION_SECRET || "dev-session-secret-change-me",
     redisUrl: process.env.REDIS_URL || "redis://bff-redis:6379",
+    // Set COOKIE_SECURE=true in production (HTTPS) so the cookie is only sent
+    // over TLS. Must be false for plain-HTTP local dev or the cookie is dropped.
+    cookieSecure: process.env.COOKIE_SECURE === "true",
     // cookie lifetime (ms)
     maxAge: 1000 * 60 * 60 * 8, // 8 hours
   },

@@ -95,7 +95,48 @@ docker compose down         # stop (keeps traces/account in volumes)
 > The two stacks are intentionally separate so the heavy Langfuse services
 > (ClickHouse, MinIO, etc.) can be started only when you want traces.
 
+## Production deployment
+
+The base `docker-compose.yml` is wired for **localhost dev**. For a real server,
+apply the `docker-compose.prod.yml` override, which parameterizes domain, HTTPS,
+secrets, and uses pre-built images.
+
+### Steps
+
+1. **Build & push images in CI** (not on the server):
+   ```bash
+   docker build -t your-registry/aichat-frontend:TAG ./UI
+   docker build -t your-registry/aichat-bff:TAG ./bff
+   docker build -t your-registry/aichat-aibackend:TAG ./aiBackend
+   docker push your-registry/aichat-*:TAG
+   ```
+2. **Configure env**: `cp .env.prod.example .env.prod` and fill in your real
+   domains, image tags, and **strong** secrets (`openssl rand -hex 32`).
+3. **Put a TLS proxy in front** (cloud LB / Traefik / external nginx) that
+   terminates HTTPS and forwards `APP_PUBLIC_URL` → the `nginx` service and
+   `KEYCLOAK_PUBLIC_URL` → the `keycloak` service.
+4. **Deploy**:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+                  --env-file .env.prod up -d
+   ```
+
+### What the prod override changes
+
+| Concern | Dev (base) | Prod (override) |
+| ------- | ---------- | --------------- |
+| Images | `build:` on the host | pre-built `image:` pulled from registry |
+| URLs | `localhost:8080/8081` | your domains (`APP_PUBLIC_URL`, `KEYCLOAK_PUBLIC_URL`) |
+| Cookies | `COOKIE_SECURE=false` | `COOKIE_SECURE=true` (HTTPS-only) |
+| Keycloak | `start-dev` | `start --optimized` (production mode) |
+| BFF→Keycloak | `host.docker.internal` | internal service name |
+| Keycloak port | published `:8081` | not published (behind the edge proxy) |
+
+> **Still your job for prod:** terminate TLS at the edge, remove/replace the
+> seeded `demo`/`demo` user, rotate every secret, and pull secrets from a
+> manager rather than committing `.env.prod`.
+
 ## Notes
 
-- Secrets here are **dev defaults** — change `SESSION_SECRET`,
+- Dev secrets in `.env` are **dev defaults** — change `SESSION_SECRET`,
   `KEYCLOAK_CLIENT_SECRET`, and Keycloak admin creds for anything real.

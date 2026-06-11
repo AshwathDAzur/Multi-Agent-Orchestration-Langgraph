@@ -37,7 +37,7 @@ async function main() {
       saveUninitialized: false,
       cookie: {
         httpOnly: true, // not accessible to JS — XSS-safe
-        secure: false, // true behind HTTPS in real prod
+        secure: config.session.cookieSecure, // true behind HTTPS (set in prod)
         sameSite: "lax",
         maxAge: config.session.maxAge,
       },

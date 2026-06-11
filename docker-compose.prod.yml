@@ -1,0 +1,46 @@
+# ===== Production override =====
+#
+# Apply ON TOP of the base compose:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                  --env-file .env.prod up -d
+#
+# What this override changes vs. dev:
+#   - Uses PRE-BUILT images (pulled from a registry) instead of building.
+#   - Runs Keycloak in PRODUCTION mode (`start`) instead of `start-dev`.
+#   - Keycloak reachable internally by service name (no host.docker.internal).
+#   - Does NOT publish Keycloak's port to the host — it must sit behind your
+#     TLS-terminating proxy/load balancer in front (mapped to KEYCLOAK_PUBLIC_URL).
+#
+# TLS: terminate HTTPS at your edge (cloud LB / external nginx / Traefik) and
+# forward to the `nginx` service. COOKIE_SECURE=true requires HTTPS end-to-end.
+
+services:
+  frontend:
+    image: "${IMAGE_FRONTEND}"
+    build: !reset null
+
+  bff:
+    image: "${IMAGE_BFF}"
+    build: !reset null
+    # In prod Keycloak is in this compose; reach it by service name, drop the
+    # host-gateway alias used for dev.
+    extra_hosts: !reset []
+
+  aibackend:
+    image: "${IMAGE_AIBACKEND}"
+    build: !reset null
+    environment:
+      # Prefer hosted/managed tracing in prod; baseurl from env if Langfuse used.
+      LANGFUSE_BASEURL: "${LANGFUSE_BASEURL:-}"
+    extra_hosts: !reset []
+
+  keycloak:
+    # Production mode (optimized, strict). Requires KC_HOSTNAME (set via
+    # KEYCLOAK_PUBLIC_URL) and a proxy doing TLS in front.
+    command: start --import-realm --optimized
+    environment:
+      KC_PROXY_HEADERS: "xforwarded"
+      KC_HOSTNAME_STRICT: "true"
+      KC_HTTP_ENABLED: "true"
+    # Do not publish Keycloak directly; route to it via the edge proxy.
+    ports: !reset []
