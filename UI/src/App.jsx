@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { API_URL } from "./config.js";
+import { API_CHAT, AUTH_ME, AUTH_LOGIN, AUTH_LOGOUT } from "./config.js";
 
 // One conversation = { id, title, messages: [{ role, text }] }
 function newConversation() {
@@ -7,6 +7,10 @@ function newConversation() {
 }
 
 export default function App() {
+  // auth: "loading" | "in" | "out"
+  const [auth, setAuth] = useState("loading");
+  const [user, setUser] = useState(null);
+
   const [conversations, setConversations] = useState([newConversation()]);
   const [activeId, setActiveId] = useState(conversations[0].id);
   const [input, setInput] = useState("");
@@ -17,6 +21,17 @@ export default function App() {
   const inputRef = useRef(null);
 
   const active = conversations.find((c) => c.id === activeId) ?? conversations[0];
+
+  // Check session on load.
+  useEffect(() => {
+    fetch(AUTH_ME, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => {
+        setUser(data.user);
+        setAuth("in");
+      })
+      .catch(() => setAuth("out"));
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -60,11 +75,16 @@ export default function App() {
     setLoading(true);
 
     try {
-      const res = await fetch(API_URL, {
+      const res = await fetch(API_CHAT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // send the session cookie
         body: JSON.stringify({ prompt }),
       });
+      if (res.status === 401) {
+        setAuth("out"); // session expired — back to login
+        return;
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `Request failed (${res.status})`);
@@ -97,6 +117,33 @@ export default function App() {
 
   const isEmpty = active.messages.length === 0;
 
+  // ----- Auth gates -----
+  if (auth === "loading") {
+    return (
+      <div className="gate">
+        <div className="gate-card">
+          <div className="brand-mark big">◆</div>
+          <p className="gate-dim">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (auth === "out") {
+    return (
+      <div className="gate">
+        <div className="gate-card">
+          <div className="brand-mark big">◆</div>
+          <h1>Chatbot</h1>
+          <p className="gate-dim">Sign in to continue to your assistant.</p>
+          <a className="gate-btn" href={AUTH_LOGIN}>
+            Sign in with Keycloak
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="layout">
       {/* ===== Sidebar ===== */}
@@ -128,12 +175,19 @@ export default function App() {
 
         <div className="sidebar-footer">
           <div className="user-row">
-            <div className="user-avatar">U</div>
+            <div className="user-avatar">
+              {(user?.name || user?.username || "U").charAt(0).toUpperCase()}
+            </div>
             <div className="user-meta">
-              <span className="user-name">User</span>
-              <span className="user-sub">Multi-agent backend</span>
+              <span className="user-name">
+                {user?.name || user?.username || "User"}
+              </span>
+              <span className="user-sub">{user?.email || "Signed in"}</span>
             </div>
           </div>
+          <a className="logout-btn" href={AUTH_LOGOUT}>
+            Sign out
+          </a>
         </div>
       </aside>
 
@@ -155,7 +209,7 @@ export default function App() {
           <div className="topbar-title">
             <h1>{active.title}</h1>
             <span className="topbar-status">
-              <span className="status-dot" /> Connected · :2424
+              <span className="status-dot" /> Connected · secured
             </span>
           </div>
         </header>

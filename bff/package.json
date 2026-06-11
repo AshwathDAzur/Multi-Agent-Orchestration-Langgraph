@@ -1,0 +1,17 @@
+{
+  "name": "bff",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "connect-redis": "^7.1.1",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "openid-client": "^5.7.1",
+    "redis": "^4.7.0"
+  }
+}

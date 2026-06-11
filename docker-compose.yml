@@ -1,0 +1,132 @@
+# Local full-stack deployment for the multi-agent chatbot.
+#
+#   Browser ──► nginx (:8080)  ─┬─ /        → frontend (static React)
+#                               ├─ /api/*   → bff (session-guarded proxy)
+#                               └─ /auth/*  → bff (Keycloak OIDC login)
+#
+#   bff ──► aibackend (:2424, internal only)   bff ──► bff-redis (sessions)
+#   bff ⇄ keycloak (:8081, OIDC)               keycloak ──► keycloak-db (postgres)
+#
+# Browser-facing Keycloak is on :8081 so OIDC redirects resolve from the host.
+# Secrets/keys come from the .env file in this directory (see .env.example).
+#
+# Start:  docker compose --env-file .env up -d --build
+# Stop:   docker compose down            (keeps volumes)
+# Wipe:   docker compose down -v
+
+services:
+  # ---------- Reverse proxy (single public entry) ----------
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - frontend
+      - bff
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+
+  # ---------- Frontend (built React, served by nginx) ----------
+  frontend:
+    build:
+      context: ./UI
+    restart: unless-stopped
+
+  # ---------- BFF (auth + API proxy) ----------
+  bff:
+    build:
+      context: ./bff
+    depends_on:
+      bff-redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      PORT: "4000"
+      PUBLIC_URL: "http://localhost:8080"
+      # PUBLIC issuer = what the browser sees + what tokens are signed with.
+      KEYCLOAK_ISSUER: "http://localhost:8081/realms/aichat"
+      # INTERNAL url = how the BFF reaches Keycloak for backchannel (token) calls.
+      KEYCLOAK_INTERNAL_URL: "http://host.docker.internal:8081/realms/aichat"
+      KEYCLOAK_CLIENT_ID: "bff-client"
+      KEYCLOAK_CLIENT_SECRET: "${KEYCLOAK_CLIENT_SECRET}"
+      AI_BACKEND_URL: "http://aibackend:2424"
+      REDIS_URL: "redis://bff-redis:6379"
+      SESSION_SECRET: "${SESSION_SECRET}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  bff-redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------- aiBackend (multi-agent supervisor, internal) ----------
+  aibackend:
+    build:
+      context: ./aiBackend
+    environment:
+      PORT: "2424"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
+      DEFAULT_MODEL: "${DEFAULT_MODEL}"
+      APP_ENV: "${APP_ENV:-development}"
+      # Point tracing at the host's Langfuse stack (if running).
+      LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
+      LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
+      LANGFUSE_BASEURL: "http://host.docker.internal:3000"
+      LANGSMITH_TRACING: "${LANGSMITH_TRACING:-false}"
+      LANGSMITH_API_KEY: "${LANGSMITH_API_KEY:-}"
+      LANGSMITH_PROJECT: "${LANGSMITH_PROJECT:-multi-agent-supervisor}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    # Not exposed to the host — only the bff (same network) can reach it.
+
+  # ---------- Keycloak (identity provider) ----------
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev --import-realm
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: "jdbc:postgresql://keycloak-db:5432/keycloak"
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_BOOTSTRAP_ADMIN_USERNAME: "${KEYCLOAK_ADMIN:-admin}"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD:-admin}"
+      # Browser-facing hostname so issued tokens use a host the browser can reach.
+      KC_HOSTNAME: "http://localhost:8081"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+  keycloak-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  keycloak_db_data:
