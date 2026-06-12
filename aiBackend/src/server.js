@@ -39,13 +39,55 @@ app.post("/chat", async (req, res) => {
     const { answer } = await runSupervisor(prompt);
     return res.json({ answer });
   } catch (err) {
-    // Don't leak internals to the client; log the detail server-side.
+    // Log full detail server-side...
     console.error("Error handling /chat:", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to process the request." });
+    // ...and return a SPECIFIC, classified message to the client.
+    const { status, error, detail } = classifyError(err);
+    return res.status(status).json({ error, detail });
   }
 });
+
+// Map internal errors to a clear client message (no stack traces leaked).
+function classifyError(err) {
+  const msg = String(err?.message || err || "");
+
+  // Tool input failed schema validation (e.g. model passed a string for a number).
+  if (/did not match expected schema|Invalid input|Received tool input/i.test(msg)) {
+    return {
+      status: 422,
+      error: "The assistant produced an invalid tool input.",
+      detail:
+        "A tool was called with arguments that didn't match its expected types. " +
+        "This usually happens on questions that need capabilities the current " +
+        "tools don't support (e.g. algebra/word problems vs. plain arithmetic).",
+    };
+  }
+
+  // Graph looped without terminating.
+  if (/recursion limit/i.test(msg)) {
+    return {
+      status: 500,
+      error: "The assistant could not converge on an answer.",
+      detail: "The agent graph hit its step limit without finishing.",
+    };
+  }
+
+  // Upstream model / network problems.
+  if (/fetch failed|ECONNREFUSED|ETIMEDOUT|timeout|429|rate limit/i.test(msg)) {
+    return {
+      status: 502,
+      error: "The model provider is unavailable or rate-limited.",
+      detail: "The request to the LLM failed. Please retry shortly.",
+    };
+  }
+
+  // Fallback — still surface the message instead of a generic string.
+  return {
+    status: 500,
+    error: "The assistant failed to process the request.",
+    detail: msg.slice(0, 300),
+  };
+}
 
 app.listen(PORT, () => {
   console.log(`Multi-agent server listening on http://localhost:${PORT}`);

@@ -87,7 +87,10 @@ export default function App() {
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Request failed (${res.status})`);
+        const msg = data.detail
+          ? `${data.error}\n\n${data.detail}`
+          : data.error || `Request failed (${res.status})`;
+        throw new Error(msg);
       }
       const data = await res.json();
       updateActive((c) => ({
