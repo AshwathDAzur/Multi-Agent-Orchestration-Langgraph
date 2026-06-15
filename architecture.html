@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Multi-Agent AI Solution — Architecture</title>
+<style>
+  :root {
+    --bg: #0c0e1a;
+    --bg2: #121527;
+    --ink: #e8eaf2;
+    --dim: #9aa0bd;
+    --line: #2a3050;
+    --ui: #3b82f6;
+    --gw: #06b6d4;
+    --agent: #a855f7;
+    --conn: #f59e0b;
+    --db: #ef6c4d;
+    --auth: #22c55e;
+    --obs: #ec4899;
+    --node: #c084fc;
+    --tool: #38bdf8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: radial-gradient(1200px 700px at 50% -10%, #1a1f3a, var(--bg)) , var(--bg);
+    color: var(--ink);
+    padding: 28px 20px 50px;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: .3px;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--dim);
+    font-size: 13px;
+    margin: 6px 0 22px;
+  }
+
+  /* ===== overall 3-column layout: auth | core stack | observability ===== */
+  .canvas {
+    max-width: 1320px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 210px 1fr 210px;
+    gap: 18px;
+    align-items: stretch;
+  }
+
+  .layer {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.005));
+    position: relative;
+  }
+  .layer-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  .stack { display: flex; flex-direction: column; gap: 18px; }
+
+  .box {
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .box .b-title { font-weight: 600; font-size: 13px; }
+  .box .b-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pill {
+    font-size: 10.5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,.03);
+    color: var(--dim);
+  }
+  .pill.node { color: var(--node); border-color: rgba(192,132,252,.4); background: rgba(192,132,252,.08); }
+  .pill.tool { color: var(--tool); border-color: rgba(56,189,248,.4); background: rgba(56,189,248,.08); }
+
+  /* layer accent colors */
+  .l-ui     { border-color: rgba(59,130,246,.45); }
+  .l-gw     { border-color: rgba(6,182,212,.45); }
+  .l-agent  { border-color: rgba(168,85,247,.45); }
+  .l-conn   { border-color: rgba(245,158,11,.45); }
+  .l-db     { border-color: rgba(239,108,77,.45); }
+  .l-auth   { border-color: rgba(34,197,94,.45); }
+  .l-obs    { border-color: rgba(236,72,153,.45); }
+
+  .l-ui .layer-title    { color: var(--ui); }     .l-ui .dot    { background: var(--ui); }
+  .l-gw .layer-title    { color: var(--gw); }     .l-gw .dot    { background: var(--gw); }
+  .l-agent .layer-title { color: var(--agent); }  .l-agent .dot { background: var(--agent); }
+  .l-conn .layer-title  { color: var(--conn); }   .l-conn .dot  { background: var(--conn); }
+  .l-db .layer-title    { color: var(--db); }     .l-db .dot    { background: var(--db); }
+  .l-auth .layer-title  { color: var(--auth); }   .l-auth .dot  { background: var(--auth); }
+  .l-obs .layer-title   { color: var(--obs); }    .l-obs .dot   { background: var(--obs); }
+
+  /* side layers fill height + center */
+  .side { display: flex; flex-direction: column; justify-content: center; }
+  .side .conns { margin-top: 14px; font-size: 11px; color: var(--dim); line-height: 1.7; }
+  .side .conns b { color: var(--ink); font-weight: 600; }
+
+  /* ===== Agentic layer: supervisor + specialist graphs ===== */
+  .agent-inner { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  .graph {
+    border: 1px dashed rgba(168,85,247,.5);
+    border-radius: 12px;
+    padding: 12px;
+    background: rgba(168,85,247,.05);
+  }
+  .graph-label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--agent); font-weight: 700; margin-bottom: 10px;
+  }
+  .super-row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; flex-wrap: wrap;
+  }
+  .gnode {
+    border: 1px solid rgba(192,132,252,.5);
+    background: rgba(192,132,252,.1);
+    border-radius: 10px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    color: #e9d8ff;
+    min-width: 84px;
+  }
+  .gnode.super {
+    border-style: solid;
+    border-color: var(--agent);
+    background: rgba(168,85,247,.22);
+    border-width: 2px;
+  }
+  .gnode.end { color: var(--dim); border-color: var(--line); background: rgba(255,255,255,.03); }
+  .arrow { color: var(--agent); font-size: 16px; }
+  .specs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+
+  .spec {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    background: rgba(255,255,255,.03);
+  }
+  .spec.detailed { border-color: rgba(168,85,247,.6); background: rgba(168,85,247,.08); }
+  .spec .s-name { font-size: 12px; font-weight: 700; margin-bottom: 8px; text-align: center; }
+  .spec.detailed .s-name { color: var(--agent); }
+  .loop {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    font-size: 10.5px;
+  }
+  .loop .mini {
+    border: 1px solid rgba(192,132,252,.45);
+    border-radius: 7px; padding: 4px 8px; width: 100%; text-align: center;
+    background: rgba(192,132,252,.08); color: #e9d8ff; font-weight: 600;
+  }
+  .loop .mini.tool { border-color: rgba(56,189,248,.45); background: rgba(56,189,248,.08); color: #bae6fd; }
+  .loop .sym { color: var(--node); font-size: 13px; }
+
+  .hitl {
+    margin-top: 9px; font-size: 10px; color: var(--conn);
+    border: 1px solid rgba(245,158,11,.4); border-radius: 7px;
+    padding: 5px 7px; background: rgba(245,158,11,.08); text-align: center;
+  }
+
+  /* vertical connector between core stack layers */
+  .vsep {
+    display: flex; flex-direction: column; align-items: center;
+    color: var(--dim); margin: -10px 0;
+  }
+  .vsep .lbl { font-size: 10px; color: var(--dim); background: var(--bg); padding: 0 6px; }
+  .vsep .ln { color: var(--line); font-size: 14px; line-height: .9; }
+
+  .flow-note { font-size: 10px; color: var(--dim); font-style: italic; }
+  .legend {
+    max-width: 1320px; margin: 26px auto 0; display: flex; flex-wrap: wrap;
+    gap: 14px; justify-content: center; font-size: 11px; color: var(--dim);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .lg-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  @media (max-width: 980px) {
+    .canvas { grid-template-columns: 1fr; }
+    .side { order: 2; }
+    .specs { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+  <h1>Multi-Agent AI Solution — Layered Architecture</h1>
+  <p class="subtitle">UI &amp; Gateway · Agentic Orchestration (LangGraph) · Digital-Worker Connectivity (.NET) · Oracle Source · with Keycloak (auth) &amp; Langfuse (tracing)</p>
+
+  <div class="canvas">
+
+    <!-- ===== LEFT: Auth layer (standalone) ===== -->
+    <div class="layer l-auth side">
+      <div class="layer-title"><span class="dot"></span>Authentication Layer</div>
+      <div class="box">
+        <div class="b-title">🔐 Keycloak (IdP)</div>
+        <div class="b-sub">Standalone · OIDC / OAuth2</div>
+        <div class="pill-row">
+          <span class="pill">bff-client (login)</span>
+          <span class="pill">aibackend-service (M2M)</span>
+        </div>
+      </div>
+      <div class="conns">
+        <b>Secures:</b><br/>
+        • UI&nbsp;→ via BFF (login, HttpOnly cookie)<br/>
+        • aiBackend → DB writes (M2M token)<br/>
+        • .NET API validates JWT on writes
+      </div>
+    </div>
+
+    <!-- ===== CENTER: the core vertical stack ===== -->
+    <div class="stack">
+
+      <!-- UI + NGINX -->
+      <div class="layer l-ui">
+        <div class="layer-title"><span class="dot"></span>UI Layer + NGINX</div>
+        <div class="box">
+          <div class="b-title">🖥️ Frontend (React / Vite) &nbsp;·&nbsp; 🔀 NGINX Reverse Proxy</div>
+          <div class="b-sub">Chat UI + approval cards · single public entry (:8080) · routes / · /api/* · /auth/*</div>
+        </div>
+      </div>
+
+      <div class="vsep"><span class="ln">▲</span><span class="lbl">HTTPS · session cookie</span><span class="ln">▼</span></div>
+
+      <!-- HTTP Gateway / BFF -->
+      <div class="layer l-gw">
+        <div class="layer-title"><span class="dot"></span>HTTP Gateway Layer (BFF)</div>
+        <div class="box">
+          <div class="b-title">🚪 Backend-for-Frontend (Node / Express)</div>
+          <div class="b-sub">OIDC login · Redis sessions · proxies /api/chat &amp; /api/chat/resume to aiBackend</div>
+        </div>
+      </div>
+
+      <div class="vsep"><span class="ln">▲</span><span class="lbl">internal call (Bearer)</span><span class="ln">▼</span></div>
+
+      <!-- AGENTIC LAYER -->
+      <div class="layer l-agent">
+        <div class="layer-title"><span class="dot"></span>Agentic Layer — aiBackend (LangGraph)</div>
+        <div class="agent-inner">
+
+          <!-- Supervisor graph -->
+          <div class="graph">
+            <div class="graph-label">Supervisor Graph (hub-and-spoke router)</div>
+            <div class="super-row">
+              <span class="gnode end">START</span>
+              <span class="arrow">→</span>
+              <span class="gnode super">Supervisor<br/><small style="font-weight:400;color:var(--dim)">route tool</small></span>
+              <span class="arrow">⇄</span>
+              <span class="gnode">Agent 1<br/>node</span>
+              <span class="gnode">Agent 2<br/>node</span>
+              <span class="gnode">DataAccess<br/>node</span>
+              <span class="arrow">→</span>
+              <span class="gnode end">END</span>
+            </div>
+            <div class="flow-note" style="text-align:center;margin-top:8px">specialists loop back to the supervisor · MemorySaver checkpointer enables HITL pause/resume</div>
+
+            <!-- Specialist sub-graphs -->
+            <div class="specs">
+              <!-- Agent 1 -->
+              <div class="spec">
+                <div class="s-name">Agent 1 (generic)</div>
+                <div class="loop">
+                  <div class="mini">llmCall</div>
+                  <div class="sym">⇅</div>
+                  <div class="mini tool">toolNode</div>
+                </div>
+                <div class="pill-row" style="justify-content:center">
+                  <span class="pill tool">tool A</span>
+                  <span class="pill tool">tool B</span>
+                </div>
+              </div>
+
+              <!-- Agent 2 -->
+              <div class="spec">
+                <div class="s-name">Agent 2 (generic)</div>
+                <div class="loop">
+                  <div class="mini">llmCall</div>
+                  <div class="sym">⇅</div>
+                  <div class="mini tool">toolNode</div>
+                </div>
+                <div class="pill-row" style="justify-content:center">
+                  <span class="pill tool">tool A</span>
+                  <span class="pill tool">tool B</span>
+                </div>
+              </div>
+
+              <!-- DataAccessAgent (detailed) -->
+              <div class="spec detailed">
+                <div class="s-name">★ DataAccessAgent</div>
+                <div class="loop">
+                  <div class="mini">llmCall &nbsp;(reason)</div>
+                  <div class="sym">⇅</div>
+                  <div class="mini tool">toolNode</div>
+                </div>
+                <div class="pill-row" style="justify-content:center">
+                  <span class="pill tool">list_users</span>
+                  <span class="pill tool">get_user</span>
+                  <span class="pill tool">list_roles</span>
+                  <span class="pill tool">get_role</span>
+                  <span class="pill tool">list_permissions</span>
+                </div>
+                <div class="pill-row" style="justify-content:center">
+                  <span class="pill node">assign_role_perm ✋</span>
+                  <span class="pill node">remove_role_perm ✋</span>
+                  <span class="pill node">assign_user_role ✋</span>
+                  <span class="pill node">remove_user_role ✋</span>
+                </div>
+                <div class="hitl">✋ write tools call <b>interrupt()</b> → Human-in-the-Loop approval before any DB change</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="vsep"><span class="ln">▲</span><span class="lbl">REST · M2M Bearer (writes)</span><span class="ln">▼</span></div>
+
+      <!-- CONNECTIVITY / DIGITAL WORKER LAYER -->
+      <div class="layer l-conn">
+        <div class="layer-title"><span class="dot"></span>Connectivity / Digital-Worker Layer</div>
+        <div class="box">
+          <div class="b-title">⚙️ OracleDigitalWorker — ASP.NET Core 8 Web API</div>
+          <div class="b-sub">EF Core (code-first) · exposes capability endpoints · reads open, writes require valid JWT</div>
+          <div class="pill-row">
+            <span class="pill">GET /api/users · /roles · /permissions</span>
+            <span class="pill">POST/DELETE (🔐 [Authorize])</span>
+            <span class="pill">audit logging</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="vsep"><span class="ln">▲</span><span class="lbl">JDBC · parameterized SQL</span><span class="ln">▼</span></div>
+
+      <!-- SOURCE / DB LAYER -->
+      <div class="layer l-db">
+        <div class="layer-title"><span class="dot"></span>Source Layer — Oracle Database</div>
+        <div class="box">
+          <div class="b-title">🗄️ Oracle 21c XE &nbsp;(schema: QUANTA / XEPDB1)</div>
+          <div class="b-sub">EPC RBAC model</div>
+          <div class="pill-row">
+            <span class="pill">USERS</span>
+            <span class="pill">ROLES</span>
+            <span class="pill">PERMISSIONS</span>
+            <span class="pill">USER_ROLES</span>
+            <span class="pill">ROLE_PERMISSIONS</span>
+            <span class="pill">AUDIT_LOGS</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== RIGHT: Observability layer ===== -->
+    <div class="layer l-obs side">
+      <div class="layer-title"><span class="dot"></span>Observability Layer</div>
+      <div class="box">
+        <div class="b-title">📊 Langfuse</div>
+        <div class="b-sub">Self-hosted · separate stack (:3000)</div>
+        <div class="pill-row">
+          <span class="pill">OTel span processor</span>
+          <span class="pill">traces · tokens · latency</span>
+        </div>
+      </div>
+      <div class="conns">
+        <b>Traces:</b><br/>
+        • every supervisor &amp; specialist run<br/>
+        • nested tool calls + timings<br/>
+        • fire-and-forget (non-fatal)
+      </div>
+    </div>
+
+  </div>
+
+  <!-- legend -->
+  <div class="legend">
+    <span><span class="lg-dot" style="background:var(--ui)"></span>UI / NGINX</span>
+    <span><span class="lg-dot" style="background:var(--gw)"></span>HTTP Gateway (BFF)</span>
+    <span><span class="lg-dot" style="background:var(--agent)"></span>Agentic (LangGraph)</span>
+    <span><span class="lg-dot" style="background:var(--conn)"></span>Connectivity (.NET)</span>
+    <span><span class="lg-dot" style="background:var(--db)"></span>Oracle Source</span>
+    <span><span class="lg-dot" style="background:var(--auth)"></span>Keycloak (auth)</span>
+    <span><span class="lg-dot" style="background:var(--obs)"></span>Langfuse (tracing)</span>
+    <span><span class="lg-dot node" style="background:var(--node)"></span>Graph node</span>
+    <span><span class="lg-dot tool" style="background:var(--tool)"></span>Tool</span>
+    <span>✋ = Human-in-the-Loop write</span>
+  </div>
+</body>
+</html>
