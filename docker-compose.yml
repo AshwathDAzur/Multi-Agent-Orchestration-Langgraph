@@ -74,11 +74,15 @@ services:
   aibackend:
     build:
       context: ./aiBackend
+    depends_on:
+      - oracledigitalworker
     environment:
       PORT: "2424"
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
       DEFAULT_MODEL: "${DEFAULT_MODEL}"
       APP_ENV: "${APP_ENV:-development}"
+      # OracleDigitalWorker now runs in this compose — reach it by service name.
+      ORACLE_API_URL: "${ORACLE_API_URL:-http://oracledigitalworker:8080}"
       # Point tracing at the host's Langfuse stack (if running).
       LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
       LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
@@ -90,6 +94,23 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
     # Not exposed to the host — only the bff (same network) can reach it.
+
+  # ---------- OracleDigitalWorker (.NET EPC data API) ----------
+  oracledigitalworker:
+    build:
+      context: ./oracleDigitalWorker
+    environment:
+      # Override the appsettings connection string. The container can't use
+      # "localhost" for Oracle (that's the container itself) — reach the host
+      # DB via the gateway alias. Double underscore = nested config key.
+      ConnectionStrings__OracleDb: "${ORACLE_CONNECTION_STRING:-User Id=QUANTA;Password=PsiogDev2026;Data Source=host.docker.internal:1521/XEPDB1;}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Exposed on the host too (handy for Swagger), but aiBackend reaches it by
+    # service name on the internal network.
+    ports:
+      - "5216:8080"
+    restart: unless-stopped
 
   # ---------- Keycloak (identity provider) ----------
   keycloak:

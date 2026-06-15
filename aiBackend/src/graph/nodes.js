@@ -13,6 +13,7 @@ import * as z from "zod";
 import { makeModel } from "../llm/model.js";
 import { mathAgent } from "../agents/mathAgent.js";
 import { weatherAgent } from "../agents/weatherAgent.js";
+import { dataAccessAgent } from "../agents/dataAccessAgent.js";
 
 // The supervisor routes by CALLING a `route` tool. Forcing a tool call
 // (tool_choice: "required") guarantees a structured, valid decision — this is
@@ -24,11 +25,12 @@ const routeTool = tool(({ next }) => next, {
     "request has already been fully answered.",
   schema: z.object({
     next: z
-      .enum(["math", "weather", "done"])
+      .enum(["math", "weather", "data", "done"])
       .describe(
         "'math' for arithmetic/calculations, 'weather' for weather questions, " +
-          "'done' when the latest specialist has already answered or no " +
-          "specialist is needed."
+          "'data' for questions about EPC users/employees, roles, or " +
+          "permissions, 'done' when the latest specialist has already answered " +
+          "or no specialist is needed."
       ),
   }),
 });
@@ -37,6 +39,9 @@ const SUPERVISOR_PROMPT =
   "You are a supervisor routing a user request to the right specialist.\n" +
   "- Route to 'math' for any arithmetic/calculation request.\n" +
   "- Route to 'weather' for any weather request.\n" +
+  "- Route to 'data' for any question about EPC users/employees, roles, " +
+  "permissions, departments, disciplines, project assignments, or access " +
+  "control.\n" +
   "- Route to 'done' when the user's request has been fully answered, or no " +
   "specialist is needed.\n" +
   "IMPORTANT: a specialist answers the request COMPLETELY in one turn " +
@@ -95,3 +100,5 @@ async function runSpecialist(name, agent, state) {
 export const mathNode = async (state) => runSpecialist("math", mathAgent, state);
 export const weatherNode = async (state) =>
   runSpecialist("weather", weatherAgent, state);
+export const dataAccessNode = async (state) =>
+  runSpecialist("data", dataAccessAgent, state);

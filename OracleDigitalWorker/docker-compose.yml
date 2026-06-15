@@ -1,0 +1,21 @@
+# Standalone compose to run ONLY the OracleDigitalWorker .NET API.
+#
+# Use this when you want the data API by itself (e.g. to test Swagger), without
+# the rest of the stack. It talks to your host's Oracle 21c via host.docker.internal.
+#
+#   docker compose up -d --build
+#   -> Swagger at http://localhost:5216/swagger
+#
+# (The main ../docker-compose.yml also includes this service for the full stack.)
+
+services:
+  oracledigitalworker:
+    build:
+      context: .
+    environment:
+      ConnectionStrings__OracleDb: "${ORACLE_CONNECTION_STRING:-User Id=QUANTA;Password=PsiogDev2026;Data Source=host.docker.internal:1521/XEPDB1;}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "5216:8080"
+    restart: unless-stopped

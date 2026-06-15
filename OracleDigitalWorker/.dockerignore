@@ -1,0 +1,8 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+**/appsettings.*.local.json
+Dockerfile
+.dockerignore

@@ -11,6 +11,8 @@ export const routeFromSupervisor = (state) => {
       return "mathNode";
     case "weather":
       return "weatherNode";
+    case "data":
+      return "dataAccessNode";
     case "done":
     default:
       return END;
