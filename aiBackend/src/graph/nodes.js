@@ -88,17 +88,21 @@ export const supervisorNode = async (state) => {
 };
 
 // Helper: run a specialist agent, record that it ran, and merge ONLY its
-// newly-produced messages back into the shared state.
-async function runSpecialist(name, agent, state) {
+// newly-produced messages back into the shared state. The parent `config` is
+// threaded through so that an interrupt() inside the specialist subgraph
+// propagates up and pauses the whole run (HITL approval).
+async function runSpecialist(name, agent, state, config) {
   const before = state.messages.length;
-  const result = await agent.invoke({ messages: state.messages });
+  const result = await agent.invoke({ messages: state.messages }, config);
   const newMessages = result.messages.slice(before);
   return { messages: newMessages, visited: [name] };
 }
 
 // Specialist nodes — each invokes its full agent and records its name.
-export const mathNode = async (state) => runSpecialist("math", mathAgent, state);
-export const weatherNode = async (state) =>
-  runSpecialist("weather", weatherAgent, state);
-export const dataAccessNode = async (state) =>
-  runSpecialist("data", dataAccessAgent, state);
+// (config is the 2nd arg LangGraph passes to node functions.)
+export const mathNode = async (state, config) =>
+  runSpecialist("math", mathAgent, state, config);
+export const weatherNode = async (state, config) =>
+  runSpecialist("weather", weatherAgent, state, config);
+export const dataAccessNode = async (state, config) =>
+  runSpecialist("data", dataAccessAgent, state, config);

@@ -30,6 +30,32 @@
         "post.logout.redirect.uris": "${APP_PUBLIC_URL:http://localhost:8080}/*"
       },
       "fullScopeAllowed": true
+    },
+    {
+      "clientId": "aibackend-service",
+      "name": "aiBackend M2M Service Client",
+      "description": "Client-credentials client for aiBackend to call OracleDigitalWorker write endpoints.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${AIBACKEND_CLIENT_SECRET:aibackend-secret}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "oracle-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "oracle-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [

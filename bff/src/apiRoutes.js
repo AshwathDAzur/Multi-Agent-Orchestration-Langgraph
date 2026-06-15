@@ -20,22 +20,33 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// POST /api/chat -> forward to aiBackend /chat with Bearer token.
-apiRoutes.post("/chat", requireAuth, async (req, res) => {
+// Forward a request body to an aiBackend path, relaying status + JSON.
+async function forward(path, body, res) {
   try {
-    const upstream = await fetch(`${config.aiBackendUrl}/chat`, {
+    const upstream = await fetch(`${config.aiBackendUrl}${path}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${req.session.tokens.access_token}`,
-      },
-      body: JSON.stringify(req.body ?? {}),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body ?? {}),
     });
-
     const data = await upstream.json().catch(() => ({}));
     res.status(upstream.status).json(data);
   } catch (err) {
-    console.error("[api] proxy error:", err.message);
+    console.error(`[api] proxy error ${path}:`, err.message);
     res.status(502).json({ error: "Upstream request failed." });
   }
+}
+
+// POST /api/chat -> start a run (may return awaiting_approval).
+apiRoutes.post("/chat", requireAuth, (req, res) => {
+  forward("/chat", req.body, res);
+});
+
+// POST /api/chat/resume -> resume a paused run with the human decision.
+// The approver is taken from the SESSION (the authenticated user), never the
+// client body — so the audit trail records who really approved it.
+apiRoutes.post("/chat/resume", requireAuth, (req, res) => {
+  const { threadId, approved, reason } = req.body ?? {};
+  const approver =
+    req.session.user.email || req.session.user.username || req.session.user.sub;
+  forward("/chat/resume", { threadId, approved, reason, approver }, res);
 });

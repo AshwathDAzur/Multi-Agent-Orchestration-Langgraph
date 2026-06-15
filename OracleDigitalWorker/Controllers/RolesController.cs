@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OracleDigitalWorker.Data;
@@ -31,10 +32,11 @@ public class RolesController : ControllerBase
         return role is null ? NotFound() : Ok(ToDto(role));
     }
 
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult<RoleDto>> Create(CreateRoleDto dto)
     {
-        if (await _db.Roles.AnyAsync(r => r.Name == dto.Name))
+        if (await _db.Roles.CountAsync(r => r.Name == dto.Name) > 0)
             return Conflict($"Role '{dto.Name}' already exists.");
 
         var role = new Role
@@ -52,12 +54,13 @@ public class RolesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = role.Id }, ToDto(role));
     }
 
+    [Authorize]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdateRoleDto dto)
     {
         var role = await _db.Roles.FirstOrDefaultAsync(r => r.Id == id);
         if (role is null) return NotFound();
-        if (await _db.Roles.AnyAsync(r => r.Name == dto.Name && r.Id != id))
+        if (await _db.Roles.CountAsync(r => r.Name == dto.Name && r.Id != id) > 0)
             return Conflict($"Role '{dto.Name}' already in use.");
 
         role.Name = dto.Name;
@@ -71,6 +74,7 @@ public class RolesController : ControllerBase
         return NoContent();
     }
 
+    [Authorize]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -84,13 +88,14 @@ public class RolesController : ControllerBase
     }
 
     // POST /api/roles/3/permissions -> grant a permission to a role
+    [Authorize]
     [HttpPost("{id:int}/permissions")]
     public async Task<IActionResult> AssignPermission(int id, AssignPermissionDto dto)
     {
-        if (!await _db.Roles.AnyAsync(r => r.Id == id)) return NotFound("Role not found.");
-        if (!await _db.Permissions.AnyAsync(p => p.Id == dto.PermissionId))
+        if (await _db.Roles.CountAsync(r => r.Id == id) == 0) return NotFound("Role not found.");
+        if (await _db.Permissions.CountAsync(p => p.Id == dto.PermissionId) == 0)
             return NotFound("Permission not found.");
-        if (await _db.RolePermissions.AnyAsync(rp => rp.RoleId == id && rp.PermissionId == dto.PermissionId))
+        if (await _db.RolePermissions.CountAsync(rp => rp.RoleId == id && rp.PermissionId == dto.PermissionId) > 0)
             return Conflict("Role already has this permission.");
 
         _db.RolePermissions.Add(new RolePermission { RoleId = id, PermissionId = dto.PermissionId });
@@ -100,6 +105,7 @@ public class RolesController : ControllerBase
     }
 
     // DELETE /api/roles/3/permissions/7 -> revoke a permission
+    [Authorize]
     [HttpDelete("{id:int}/permissions/{permissionId:int}")]
     public async Task<IActionResult> RevokePermission(int id, int permissionId)
     {

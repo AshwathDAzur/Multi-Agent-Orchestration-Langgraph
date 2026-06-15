@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OracleDigitalWorker.Data;
@@ -36,12 +37,13 @@ public class UsersController : ControllerBase
     }
 
     // POST /api/users
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult<UserDto>> Create(CreateUserDto dto)
     {
-        if (await _db.Users.AnyAsync(u => u.EmployeeCode == dto.EmployeeCode))
+        if (await _db.Users.CountAsync(u => u.EmployeeCode == dto.EmployeeCode) > 0)
             return Conflict($"EmployeeCode '{dto.EmployeeCode}' already exists.");
-        if (await _db.Users.AnyAsync(u => u.Email == dto.Email))
+        if (await _db.Users.CountAsync(u => u.Email == dto.Email) > 0)
             return Conflict($"Email '{dto.Email}' already exists.");
 
         var user = new User
@@ -68,13 +70,14 @@ public class UsersController : ControllerBase
     }
 
     // PUT /api/users/5
+    [Authorize]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdateUserDto dto)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (user is null) return NotFound();
 
-        if (await _db.Users.AnyAsync(u => u.Email == dto.Email && u.Id != id))
+        if (await _db.Users.CountAsync(u => u.Email == dto.Email && u.Id != id) > 0)
             return Conflict($"Email '{dto.Email}' already in use.");
 
         user.FirstName = dto.FirstName;
@@ -97,6 +100,7 @@ public class UsersController : ControllerBase
     }
 
     // DELETE /api/users/5
+    [Authorize]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -109,14 +113,15 @@ public class UsersController : ControllerBase
     }
 
     // POST /api/users/5/roles  -> assign a role
+    [Authorize]
     [HttpPost("{id:int}/roles")]
     public async Task<IActionResult> AssignRole(int id, AssignRoleDto dto)
     {
         var user = await _db.Users.FindAsync(id);
         if (user is null) return NotFound("User not found.");
-        if (!await _db.Roles.AnyAsync(r => r.Id == dto.RoleId))
+        if (await _db.Roles.CountAsync(r => r.Id == dto.RoleId) == 0)
             return NotFound("Role not found.");
-        if (await _db.UserRoles.AnyAsync(ur => ur.UserId == id && ur.RoleId == dto.RoleId))
+        if (await _db.UserRoles.CountAsync(ur => ur.UserId == id && ur.RoleId == dto.RoleId) > 0)
             return Conflict("User already has this role.");
 
         _db.UserRoles.Add(new UserRole
@@ -131,6 +136,7 @@ public class UsersController : ControllerBase
     }
 
     // DELETE /api/users/5/roles/3  -> remove a role
+    [Authorize]
     [HttpDelete("{id:int}/roles/{roleId:int}")]
     public async Task<IActionResult> RemoveRole(int id, int roleId)
     {

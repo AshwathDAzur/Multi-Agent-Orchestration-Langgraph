@@ -83,6 +83,10 @@ services:
       APP_ENV: "${APP_ENV:-development}"
       # OracleDigitalWorker now runs in this compose — reach it by service name.
       ORACLE_API_URL: "${ORACLE_API_URL:-http://oracledigitalworker:8080}"
+      # M2M auth: fetch a client-credentials token from Keycloak to call writes.
+      KEYCLOAK_TOKEN_URL: "${KEYCLOAK_TOKEN_URL:-http://keycloak:8080/realms/aichat/protocol/openid-connect/token}"
+      ORACLE_CLIENT_ID: "${ORACLE_CLIENT_ID:-aibackend-service}"
+      ORACLE_CLIENT_SECRET: "${AIBACKEND_CLIENT_SECRET:-aibackend-secret}"
       # Point tracing at the host's Langfuse stack (if running).
       LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
       LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
@@ -99,11 +103,18 @@ services:
   oracledigitalworker:
     build:
       context: ./oracleDigitalWorker
+    depends_on:
+      - keycloak
     environment:
       # Override the appsettings connection string. The container can't use
       # "localhost" for Oracle (that's the container itself) — reach the host
       # DB via the gateway alias. Double underscore = nested config key.
       ConnectionStrings__OracleDb: "${ORACLE_CONNECTION_STRING:-User Id=QUANTA;Password=PsiogDev2026;Data Source=host.docker.internal:1521/XEPDB1;}"
+      # JWT validation (M2M). Fetch keys from Keycloak internally; validate the
+      # issuer against the browser-facing public value (same split as the BFF).
+      Keycloak__MetadataUrl: "http://keycloak:8080/realms/aichat"
+      Keycloak__Issuer: "${KEYCLOAK_ISSUER:-http://localhost:8081/realms/aichat}"
+      Keycloak__Audience: "oracle-api"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Exposed on the host too (handy for Swagger), but aiBackend reaches it by
@@ -131,6 +142,10 @@ services:
       KC_HOSTNAME: "${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}"
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
+      # Return backchannel URLs (JWKS, token, etc.) matching the request host, so
+      # internal callers (the .NET API on keycloak:8080) get reachable URLs while
+      # browsers still get localhost:8081. Fixes JWKS-not-reachable on validation.
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       # Realm import reads these for redirect URIs / client secret substitution.
       APP_PUBLIC_URL: "${APP_PUBLIC_URL:-http://localhost:8080}"
       BFF_CLIENT_SECRET: "${KEYCLOAK_CLIENT_SECRET:-bff-secret}"

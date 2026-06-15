@@ -8,7 +8,7 @@
 // edge, and each specialist loops BACK so the supervisor can decide what's next
 // (or finish). This is what enables multi-step coordination.
 
-import { StateGraph, START, END } from "@langchain/langgraph";
+import { StateGraph, START, END, MemorySaver } from "@langchain/langgraph";
 import { SupervisorState } from "./state.js";
 import {
   supervisorNode,
@@ -33,4 +33,7 @@ export const supervisor = new StateGraph(SupervisorState)
   .addEdge("mathNode", "supervisor")
   .addEdge("weatherNode", "supervisor")
   .addEdge("dataAccessNode", "supervisor")
-  .compile();
+  // Checkpointer persists state at an interrupt() so the run can be resumed
+  // (human-in-the-loop). In-memory is fine for local dev; use a durable store
+  // (Postgres/Redis) for production so pauses survive restarts.
+  .compile({ checkpointer: new MemorySaver() });

@@ -1,5 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { API_CHAT, AUTH_ME, AUTH_LOGIN, AUTH_LOGOUT } from "./config.js";
+import {
+  API_CHAT,
+  API_CHAT_RESUME,
+  AUTH_ME,
+  AUTH_LOGIN,
+  AUTH_LOGOUT,
+} from "./config.js";
 
 // One conversation = { id, title, messages: [{ role, text }] }
 function newConversation() {
@@ -58,6 +64,66 @@ export default function App() {
     setSidebarOpen(false);
   }
 
+  // Turn a backend result into the right message: a normal answer, or an
+  // approval card the user must act on (HITL).
+  function handleResult(data) {
+    if (data.status === "awaiting_approval") {
+      updateActive((c) => ({
+        ...c,
+        messages: [
+          ...c.messages,
+          { role: "approval", approval: data.approval, threadId: data.threadId },
+        ],
+      }));
+    } else {
+      updateActive((c) => ({
+        ...c,
+        messages: [...c.messages, { role: "assistant", text: data.answer }],
+      }));
+    }
+  }
+
+  // Approve or reject a pending action, then resume the run.
+  async function resolveApproval(msgIndex, approved) {
+    const msg = active.messages[msgIndex];
+    if (!msg?.threadId || loading) return;
+
+    // Mark the card resolved so the buttons disappear.
+    updateActive((c) => ({
+      ...c,
+      messages: c.messages.map((m, i) =>
+        i === msgIndex ? { ...m, resolved: approved ? "approved" : "rejected" } : m
+      ),
+    }));
+    setLoading(true);
+
+    try {
+      const res = await fetch(API_CHAT_RESUME, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ threadId: msg.threadId, approved }),
+      });
+      if (res.status === 401) {
+        setAuth("out");
+        return;
+      }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `Request failed (${res.status})`);
+      }
+      handleResult(await res.json());
+    } catch (err) {
+      updateActive((c) => ({
+        ...c,
+        messages: [...c.messages, { role: "error", text: err.message }],
+      }));
+    } finally {
+      setLoading(false);
+      inputRef.current?.focus();
+    }
+  }
+
   async function sendMessage(text) {
     const prompt = (text ?? input).trim();
     if (!prompt || loading) return;
@@ -93,10 +159,7 @@ export default function App() {
         throw new Error(msg);
       }
       const data = await res.json();
-      updateActive((c) => ({
-        ...c,
-        messages: [...c.messages, { role: "assistant", text: data.answer }],
-      }));
+      handleResult(data);
     } catch (err) {
       updateActive((c) => ({
         ...c,
@@ -237,18 +300,57 @@ export default function App() {
             </div>
           ) : (
             <div className="thread">
-              {active.messages.map((m, i) => (
-                <div key={i} className={`msg ${m.role}`}>
-                  <div className="msg-role">
-                    {m.role === "user"
-                      ? "You"
-                      : m.role === "error"
-                      ? "Error"
-                      : "Assistant"}
+              {active.messages.map((m, i) =>
+                m.role === "approval" ? (
+                  <div key={i} className="msg approval-msg">
+                    <div className="msg-role">Approval required</div>
+                    <div className="approval-card">
+                      <div className="approval-icon">⚠</div>
+                      <div className="approval-body">
+                        <p className="approval-summary">{m.approval?.summary}</p>
+                        <p className="approval-sub">
+                          This is a write action and needs your approval.
+                        </p>
+                        {!m.resolved ? (
+                          <div className="approval-actions">
+                            <button
+                              className="approve-btn"
+                              onClick={() => resolveApproval(i, true)}
+                              disabled={loading}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="reject-btn"
+                              onClick={() => resolveApproval(i, false)}
+                              disabled={loading}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <p className={`approval-status ${m.resolved}`}>
+                            {m.resolved === "approved"
+                              ? "✓ Approved"
+                              : "✕ Rejected"}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="msg-text">{m.text}</div>
-                </div>
-              ))}
+                ) : (
+                  <div key={i} className={`msg ${m.role}`}>
+                    <div className="msg-role">
+                      {m.role === "user"
+                        ? "You"
+                        : m.role === "error"
+                        ? "Error"
+                        : "Assistant"}
+                    </div>
+                    <div className="msg-text">{m.text}</div>
+                  </div>
+                )
+              )}
               {loading && (
                 <div className="msg assistant">
                   <div className="msg-role">Assistant</div>

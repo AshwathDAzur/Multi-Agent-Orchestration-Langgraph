@@ -7,7 +7,8 @@
 
 import express from "express";
 import cors from "cors";
-import { runSupervisor } from "./service.js";
+import { randomUUID } from "node:crypto";
+import { runSupervisor, resumeSupervisor } from "./service.js";
 import { tracingTarget } from "./observability.js";
 
 const app = express();
@@ -24,7 +25,8 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// Main endpoint: send a prompt, get the agent's answer.
+// Main endpoint: send a prompt. Returns either a completed answer OR an
+// approval request (status: "awaiting_approval") with a threadId to resume.
 app.post("/chat", async (req, res) => {
   const { prompt } = req.body ?? {};
 
@@ -36,12 +38,33 @@ app.post("/chat", async (req, res) => {
   }
 
   try {
-    const { answer } = await runSupervisor(prompt);
-    return res.json({ answer });
+    const threadId = randomUUID();
+    const result = await runSupervisor(prompt, threadId);
+    return res.json(result); // { status, answer? , approval?, threadId }
   } catch (err) {
-    // Log full detail server-side...
     console.error("Error handling /chat:", err);
-    // ...and return a SPECIFIC, classified message to the client.
+    const { status, error, detail } = classifyError(err);
+    return res.status(status).json({ error, detail });
+  }
+});
+
+// Resume a paused run with the human's decision.
+//   { threadId, approved: true|false, approver?, reason? }
+app.post("/chat/resume", async (req, res) => {
+  const { threadId, approved, approver, reason } = req.body ?? {};
+
+  if (typeof threadId !== "string" || threadId.trim() === "") {
+    return res.status(400).json({ error: "Body must include 'threadId'." });
+  }
+  if (typeof approved !== "boolean") {
+    return res.status(400).json({ error: "Body must include boolean 'approved'." });
+  }
+
+  try {
+    const result = await resumeSupervisor(threadId, { approved, approver, reason });
+    return res.json(result);
+  } catch (err) {
+    console.error("Error handling /chat/resume:", err);
     const { status, error, detail } = classifyError(err);
     return res.status(status).json({ error, detail });
   }

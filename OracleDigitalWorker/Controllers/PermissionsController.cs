@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OracleDigitalWorker.Data;
@@ -27,10 +28,11 @@ public class PermissionsController : ControllerBase
         return p is null ? NotFound() : Ok(ToDto(p));
     }
 
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult<PermissionDto>> Create(CreatePermissionDto dto)
     {
-        if (await _db.Permissions.AnyAsync(p => p.Code == dto.Code))
+        if (await _db.Permissions.CountAsync(p => p.Code == dto.Code) > 0)
             return Conflict($"Permission code '{dto.Code}' already exists.");
 
         var p = new Permission
@@ -48,6 +50,7 @@ public class PermissionsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = p.Id }, ToDto(p));
     }
 
+    [Authorize]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdatePermissionDto dto)
     {
@@ -63,6 +66,7 @@ public class PermissionsController : ControllerBase
         return NoContent();
     }
 
+    [Authorize]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {

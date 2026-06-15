@@ -563,6 +563,77 @@ body {
   color: var(--text);
 }
 
+/* ===== Approval card (HITL) ===== */
+.approval-card {
+  display: flex;
+  gap: 14px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--white);
+  border-radius: 10px;
+}
+.approval-icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.approval-body {
+  flex: 1;
+}
+.approval-summary {
+  font-size: 14.5px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.approval-sub {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+.approval-actions {
+  display: flex;
+  gap: 10px;
+}
+.approve-btn,
+.reject-btn {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border-light);
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.approve-btn {
+  background: var(--white);
+  color: var(--black);
+  border-color: var(--white);
+}
+.reject-btn {
+  background: transparent;
+  color: var(--text);
+}
+.approve-btn:hover:not(:disabled),
+.reject-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+.approve-btn:disabled,
+.reject-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.approval-status {
+  font-size: 13px;
+  font-weight: 600;
+}
+.approval-status.approved {
+  color: #d4d4d4;
+}
+.approval-status.rejected {
+  color: var(--text-dim);
+}
+
 /* backdrop (mobile) */
 .backdrop {
   display: none;
